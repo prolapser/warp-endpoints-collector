@@ -1,0 +1,32 @@
+name: Discover Available WARP Endpoints
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 13 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  discover-warp-endpoints:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download binary and run WARP speed test
+        run: python scripts/run_warp_test.py
+
+      - name: Generate README.md and result.json
+        run: python scripts/create_output.py
+
+      - name: Commit and push results
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md result.json
+          git commit -m "🔄 Update WARP endpoints ($(date -u '+%Y-%m-%d %H:%M UTC'))" \
+            || echo "No changes to commit"
+          git push
