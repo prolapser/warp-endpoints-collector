@@ -5,8 +5,8 @@ Falls back to hardcoded list if all sources fail.
 import re
 import sys
 
-from scripts.curl import curl_get
-from scripts.known_endpoints import CIDRS
+from curl import curl_get
+from known_endpoints import CIDRS
 
 SOURCES = [
     # 1. CloudflareWarpSpeedTest (CIDR list in Go)

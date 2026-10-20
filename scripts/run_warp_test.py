@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from fetch_cidrs import fetch_cidrs
-from scripts.curl import curl_get
+from curl import curl_get
 
 REPO = "puzige/CloudflareWarpSpeedTest"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
