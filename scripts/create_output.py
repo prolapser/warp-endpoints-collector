@@ -21,7 +21,15 @@ README_TEMPLATE = """\
 A list of endpoints available for connecting to the **Cloudflare WARP** service,
 updated automatically every week.
 
-> The testing tool: [peanut996/CloudflareWarpSpeedTest](https://github.com/peanut996/CloudflareWarpSpeedTest)
+> The testing tool: [puzige/CloudflareWarpSpeedTest](https://github.com/puzige/CloudflareWarpSpeedTest)
+
+Similar projects:
+- https://github.com/mahyartdb/cf-scanner
+- https://github.com/dedikar/RR-WARP-Scanner
+- https://github.com/vernette/warpscout
+- https://github.com/nyeinkokoaung404/warp-scanner
+- https://github.com/niklzz/warpscout-tg
+- https://github.com/arjeyproject/WarpEP
 
 ## Available Endpoints
 

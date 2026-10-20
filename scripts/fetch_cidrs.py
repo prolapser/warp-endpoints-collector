@@ -3,59 +3,85 @@ Fetch WARP CIDRs from upstream sources.
 Falls back to hardcoded list if all sources fail.
 """
 import re
-import subprocess
 import sys
 
-FALLBACK_CIDRS = [
-    "162.159.192.0/24",
-    "162.159.193.0/24",
-    "162.159.195.0/24",
-    "162.159.204.0/24",
-    "188.114.96.0/24",
-    "188.114.97.0/24",
-    "188.114.98.0/24",
-    "188.114.99.0/24",
-    "8.34.146.0/24",
-    "8.47.69.0/24",
-]
+from scripts.curl import curl_get
+from scripts.known_endpoints import CIDRS
 
 SOURCES = [
+    # 1. CloudflareWarpSpeedTest (CIDR list in Go)
     {
-        "url": (
-            "https://raw.githubusercontent.com/"
-            "peanut996/CloudflareWarpSpeedTest/"
-            "refs/heads/master/task/warping.go"
-        ),
-        # matches string literals inside commonIPv4CIDRs = []string{ ... }
+        "url": "https://raw.githubusercontent.com/puzige/CloudflareWarpSpeedTest/refs/heads/master/task/warping.go",
         "pattern": r'commonIPv4CIDRs\s*=\s*\[\]string\{([^}]+)\}',
-        "extractor": lambda m: re.findall(r'"(\d+\.\d+\.\d+\.\d+/\d+)"', m),
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
     },
+    # 2. warp-endpoint-tester (CIDR tuple in Python)
     {
-        "url": (
-            "https://raw.githubusercontent.com/"
-            "geannikakakiku99532-lang/warp-endpoint-tester/"
-            "refs/heads/main/check_cf_warp_endpoint.py"
-        ),
-        # matches string literals inside CDIRS_V4 = ( ... )
+        "url": "https://raw.githubusercontent.com/geannikakakiku99532-lang/warp-endpoint-tester/refs/heads/main/check_cf_warp_endpoint.py",
         "pattern": r'CDIRS_V4\s*=\s*\(([^)]+)\)',
-        "extractor": lambda m: re.findall(r'"(\d+\.\d+\.\d+\.\d+/\d+)"', m),
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 3. cf-scanner (Plain text list of CIDRs)
+    {
+        "url": "https://raw.githubusercontent.com/mahyartdb/cf-scanner/refs/heads/main/data/warp-pools.txt",
+        "pattern": r'(.*)',
+        "extractor": lambda m: re.findall(r'(\d+\.\d+\.\d+\.\d+/\d+)', m),
+    },
+    # 4. WarpEP (CIDR tuple with type annotation in Python)
+    {
+        "url": "https://raw.githubusercontent.com/arjeyproject/WarpEP/refs/heads/main/warpep/endpoints.py",
+        "pattern": r'IPV4_PREFIXES[^=]*=\s*\(([^)]+)\)',
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 5. warp-awg-gen (24 IPs in Go -> converted to /24 subnets)
+    {
+        "url": "https://raw.githubusercontent.com/Skiro1/warp-awg-gen/refs/heads/master/internal/awg/endpoint.go",
+        "pattern": r'knownWarpIPs\s*=\s*\[\]string\{([^}]+)\}',
+        "extractor": lambda m: [f"{ip}.0/24" for ip in re.findall(r'["\'](\d+\.\d+\.\d+)\.\d+["\']', m)],
+    },
+    # 6. warp-scanner (14 prefixes with trailing dot in Go -> converted to /24)
+    {
+        "url": "https://raw.githubusercontent.com/nyeinkokoaung404/warp-scanner/refs/heads/main/main.go",
+        "pattern": r'ipv4Prefixes\s*:=\s*\[\]string\{([^}]+)\}',
+        "extractor": lambda m: [f"{p}0/24" for p in re.findall(r'["\'](\d+\.\d+\.\d+\.)["\']', m)],
+    },
+    # 7. warpscout-tg (14 netip.MustParsePrefix in Go)
+    {
+        "url": "https://raw.githubusercontent.com/niklzz/warpscout-tg/refs/heads/master/pools.go",
+        "pattern": r'poolsV4\s*=\s*\[\]netip\.Prefix\{([^}]+)\}',
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 8. warpscout (14 netip.MustParsePrefix in Go)
+    {
+        "url": "https://raw.githubusercontent.com/vernette/warpscout/refs/heads/master/pools.go",
+        "pattern": r'poolsV4\s*=\s*\[\]netip\.Prefix\{([^}]+)\}',
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 9. Oberon-Core (33 IP:Port endpoints in Go -> converted to /24)
+    {
+        "url": "https://raw.githubusercontent.com/rezakhosh78/Oberon-Core/refs/heads/main/scan.go",
+        "pattern": r'fast\s*:=\s*\[\]string\{([^}]+)\}',
+        "extractor": lambda m: [f"{ip}.0/24" for ip in re.findall(r'["\'](\d+\.\d+\.\d+)\.\d+:\d+["\']', m)],
+    },
+    # 10. RR-WARP-Scanner (14 netip.MustParsePrefix in Go)
+    {
+        "url": "https://raw.githubusercontent.com/dedikar/RR-WARP-Scanner/refs/heads/main/engine/pools.go",
+        "pattern": r'poolsV4\s*=\s*\[\]netip\.Prefix\{([^}]+)\}',
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 11. Warp-Endpoint-Scanner: warpip.py (9 CIDRs, including commented-out lines)
+    {
+        "url": "https://raw.githubusercontent.com/DarknessShade/Warp-Endpoint-Scanner/refs/heads/main/warpip.py",
+        "pattern": r'warp_cidr\s*=\s*\[([^\]]+)\]',
+        "extractor": lambda m: re.findall(r'["\'](\d+\.\d+\.\d+\.\d+/\d+)["\']', m),
+    },
+    # 12. Warp-Endpoint-Scanner: WES.py (14 prefixes in Python list -> converted to /24)
+    {
+        "url": "https://raw.githubusercontent.com/DarknessShade/Warp-Endpoint-Scanner/refs/heads/main/WES.py",
+        "pattern": r'IPV4_PREFIXES\s*=\s*\[([^\]]+)\]',
+        "extractor": lambda m: [f"{p}0/24" for p in re.findall(r'["\'](\d+\.\d+\.\d+\.)["\']', m)],
     },
 ]
-
-
-def curl_get(url: str) -> str | None:
-    """Fetch URL content via curl subprocess. Returns text or None on error."""
-    try:
-        result = subprocess.run(
-            ["curl", "-fsSL", "--max-time", "15", url],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as exc:
-        print(f"  curl failed for {url}: {exc}", file=sys.stderr)
-        return None
 
 
 def fetch_cidrs_from_source(source: dict) -> list[str] | None:
@@ -84,13 +110,14 @@ def fetch_cidrs() -> list[str]:
     Merge results from all that succeed; fall back to hardcoded list
     if none succeed or result is empty.
     """
-    merged: list[str] = FALLBACK_CIDRS
+    merged: list[str] = []
 
     for source in SOURCES:
         cidrs = fetch_cidrs_from_source(source)
         if cidrs:
-            print(f"  Found {len(cidrs)} CIDRs from source.")
-            for cidr in cidrs:
+            unique_source_cidrs = list(dict.fromkeys(cidrs))
+            print(f"  Found {len(cidrs)} entries ({len(unique_source_cidrs)} unique CIDRs) from source.")
+            for cidr in unique_source_cidrs:
                 if cidr not in merged:
                     merged.append(cidr)
 
@@ -99,7 +126,7 @@ def fetch_cidrs() -> list[str]:
         return merged
 
     print("All upstream sources failed. Using fallback CIDRs.", file=sys.stderr)
-    return FALLBACK_CIDRS
+    return list(CIDRS)
 
 
 if __name__ == "__main__":
