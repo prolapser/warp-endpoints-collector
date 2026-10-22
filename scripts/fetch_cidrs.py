@@ -121,11 +121,11 @@ def fetch_cidrs() -> list[str]:
                 if cidr not in merged:
                     merged.append(cidr)
 
-    if merged:
-        print(f"Fetched {len(merged)} unique CIDRs from upstream sources.")
-        return merged
+    # if merged:
+    #     print(f"Fetched {len(merged)} unique CIDRs from upstream sources.")
+    #     return merged
 
-    print("All upstream sources failed. Using fallback CIDRs.", file=sys.stderr)
+    # print("All upstream sources failed. Using fallback CIDRs.", file=sys.stderr)
     return list(CIDRS)
 
 
