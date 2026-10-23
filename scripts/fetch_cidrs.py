@@ -110,7 +110,7 @@ def fetch_cidrs() -> list[str]:
     Merge results from all that succeed; fall back to hardcoded list
     if none succeed or result is empty.
     """
-    merged: list[str] = []
+    merged = CIDRS.copy()
 
     for source in SOURCES:
         cidrs = fetch_cidrs_from_source(source)
@@ -121,11 +121,11 @@ def fetch_cidrs() -> list[str]:
                 if cidr not in merged:
                     merged.append(cidr)
 
-    # if merged:
-    #     print(f"Fetched {len(merged)} unique CIDRs from upstream sources.")
-    #     return merged
+    if merged:
+        print(f"Fetched {len(merged)} unique CIDRs from upstream sources.")
+        return merged
 
-    # print("All upstream sources failed. Using fallback CIDRs.", file=sys.stderr)
+    print("All upstream sources failed. Using fallback CIDRs.", file=sys.stderr)
     return list(CIDRS)
 
 
